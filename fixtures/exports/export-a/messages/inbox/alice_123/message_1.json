@@ -1,0 +1,15 @@
+{
+  "title": "Alice Example",
+  "participants": [{"name":"Jamie Burkart"},{"name":"Alice Example"}],
+  "messages": [
+    {"sender_name":"Alice Example","timestamp_ms":1717200000000,"content":"Hey Jamie 😊 — café mañana"},
+    {"sender_name":"Jamie Burkart","timestamp_ms":1717200060000,"content":"Hey — good to hear from you.","reactions":[{"actor":"Alice Example","reaction":"❤️"}]},
+    {"sender_name":"Alice Example","timestamp_ms":1717200120000,"photos":[{"uri":"media/photo_001.jpg"}]},
+    {"sender_name":"Alice Example","timestamp_ms":1717200180000,"photos":[{"uri":"media/missing.jpg"}]},
+    {"sender_name":"Jamie Burkart","timestamp_ms":1717200240000,"share":{"link":"https://example.com","share_text":"Example"}},
+    {"sender_name":"Alice Example","timestamp_ms":1717200300000,"content":"First line\nSecond line\nThird line"},
+    {"sender_name":"Alice Example","timestamp_ms":1717200360000,"content":"FranÃ§ois says hi"},
+    {"sender_name":"Alice Example","timestamp_ms":1717200360000,"content":"Duplicate-ish same timestamp, different text"},
+    {"sender_name":"Alice Example","timestamp_ms":1717200420000,"type":"weird_event"}
+  ]
+}

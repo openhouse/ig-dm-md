@@ -1,0 +1,8 @@
+{
+  "title": "Residency Planning",
+  "participants": [{"name":"Jamie Burkart"},{"name":"Alice Example"},{"name":"Bob Example"}],
+  "messages": [
+    {"sender_name":"Bob Example","timestamp_ms":1717286400000,"content":"Group kickoff"},
+    {"sender_name":"Alice Example","timestamp_ms":1717286460000,"content":"Sounds good"}
+  ]
+}

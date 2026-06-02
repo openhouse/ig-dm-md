@@ -1,0 +1,12 @@
+export type SourceCategory = 'inbox' | 'archived' | 'message_requests' | 'filtered' | 'unknown';
+export type ConversationKind = 'direct' | 'group' | 'unknown';
+export type MessageKind = 'text' | 'media' | 'share' | 'reaction' | 'call' | 'unavailable' | 'unsupported' | 'mixed';
+export type AttachmentKind = 'photo' | 'video' | 'audio' | 'file' | 'gif' | 'sticker' | 'unknown';
+export type Participant = { name: string; username?: string };
+export type NormalizedAttachment = { kind: AttachmentKind; sourceUri?: string; originalFilename?: string; outputRelativePath?: string; mimeType?: string; raw?: unknown };
+export type NormalizedReaction = { actor?: string; reaction?: string; timestampMs?: number; raw?: unknown };
+export type NormalizedShare = { link?: string; text?: string; title?: string; raw?: unknown };
+export type NormalizedCall = { type?: string; durationSeconds?: number; missed?: boolean; raw?: unknown };
+export type NormalizedMessage = { fingerprint: string; timestampMs: number; timestampIso: string; senderName: string; text?: string; attachments: NormalizedAttachment[]; reactions: NormalizedReaction[]; share?: NormalizedShare; call?: NormalizedCall; isUnavailable?: boolean; messageKind: MessageKind; raw: unknown };
+export type ParseWarning = { severity: 'info' | 'warning' | 'error'; code: string; message: string; sourcePath?: string; sourceThreadKey?: string };
+export type NormalizedConversation = { sourceConversationId: string; sourceThreadKey: string; sourceCategory: SourceCategory; kind: ConversationKind; title: string; participants: Participant[]; sourcePaths: string[]; sourceFolder: string; messages: NormalizedMessage[]; rawMetadata?: unknown; warnings: ParseWarning[] };
