@@ -6,7 +6,7 @@ import { getRenderData } from '../store/repositories.js';
 import { atomicReplaceDirectory, MANAGED_MARKER } from '../utils/atomicWrite.js';
 import { renderConversationMarkdown, mediaOutputName } from './renderConversationMarkdown.js';
 import { renderConversations, renderIndex } from './renderIndex.js';
-import { renderImports, renderWarnings } from './renderImports.js';
+import { dedupeWarnings, renderImports, renderWarnings } from './renderImports.js';
 import { toPosix } from '../utils/paths.js';
 
 export async function renderArchive(db: Database.Database, config: AppConfig, outputDir = config.paths.outputDir, force = false): Promise<{ threads: number; messages: number; media: number }> {
@@ -43,14 +43,14 @@ export async function renderArchive(db: Database.Database, config: AppConfig, ou
         sourcePaths: JSON.parse(thread.raw_metadata_json || '{}').sourcePaths ?? [],
         sourceExports: data.exports.map((e: any) => e.name),
         renderedFiles: ['chat.md'],
-        warnings: thread.warnings.map((w: any) => ({ code: w.code, severity: w.severity, message: w.message }))
+        warnings: dedupeWarnings(thread.warnings).map((w: any) => ({ code: w.code, severity: w.severity, message: w.message }))
       };
       await writeFile(path.join(dir, 'metadata.json'), `${JSON.stringify(metadata, null, 2)}\n`);
       generatedPaths.push(`${toPosix(thread.output_dir)}/chat.md`, `${toPosix(thread.output_dir)}/metadata.json`);
     }
     const totalMessages = data.threads.reduce((n: number, t: any) => n + t.messages.length, 0);
     const totalMedia = data.threads.reduce((n: number, t: any) => n + t.media.length, 0);
-    await writeFile(path.join(stage, '_system', 'render-manifest.json'), `${JSON.stringify({ app: 'ig-dm-md', version: '0.1.0', renderedAt: new Date().toISOString(), config: { source: config.source.kind, timezone: config.render.timezone, outputDir }, sourceExports: data.exports.map((e: any) => ({ id: e.id, name: e.name })), totalThreads: data.threads.length, totalMessages, totalMedia, outputPathsGenerated: generatedPaths }, null, 2)}\n`);
+    await writeFile(path.join(stage, '_system', 'render-manifest.json'), `${JSON.stringify({ app: 'ig-dm-md', version: '0.1.0', config: { source: config.source.kind, timezone: config.render.timezone, outputDir }, sourceExports: data.exports.map((e: any) => ({ id: e.id, name: e.name })), totalThreads: data.threads.length, totalMessages, totalMedia, outputPathsGenerated: generatedPaths }, null, 2)}\n`);
     await writeFile(path.join(stage, '_system', 'sync-log.md'), '# Sync log\n\nSee imports.md for imported exports.\n');
   }, force);
   return { threads: data.threads.length, messages: data.threads.reduce((n: number, t: any) => n + t.messages.length, 0), media: data.threads.reduce((n: number, t: any) => n + t.media.length, 0) };

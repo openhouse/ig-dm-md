@@ -34,9 +34,9 @@ npm run sync:fixture
 You can also run the built CLI against a local export folder:
 
 ```bash
-node dist/cli.js sync --local-source ./fixtures/exports --output ./tmp/archive
-node dist/cli.js render --output ./tmp/archive
-node dist/cli.js doctor
+node dist/cli.js sync --local-source ./fixtures/exports --output ./tmp/archive --state-dir ./tmp/.igdm
+node dist/cli.js render --output ./tmp/archive --state-dir ./tmp/.igdm
+node dist/cli.js doctor --state-dir ./tmp/.igdm
 ```
 
 ## Initializing a local config
@@ -62,7 +62,8 @@ A conversation folder can contain `message_1.json`, `message_2.json`, additional
 
 ## Output and state locations
 
-Technical state lives outside the rendered archive by default:
+Technical state lives outside the rendered archive by default. Use `--state-dir <path>` with `sync`, `render`, or `doctor` when you want isolated manual test state instead of the configured `.igdm` directory.
+
 
 - `.igdm/state.sqlite` — canonical SQLite store
 - `.igdm/cache/` — extracted ZIP/cache area
