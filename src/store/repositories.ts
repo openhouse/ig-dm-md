@@ -3,7 +3,8 @@ import type { NormalizedConversation, ParseWarning } from '../instagram/types.js
 import { stableConversationDir } from '../utils/slug.js';
 
 export type ImportStats = { conversationsParsed: number; messagesImported: number; duplicateMessagesSkipped: number; mediaItemsImported: number; warnings: number; exportImported: boolean };
-export type ExportRecord = { id: number; source_kind: string; source_identifier: string; name: string; modified_time?: string; imported_at?: string; first_imported_at?: string; last_seen_at?: string; last_changed_at?: string; warning_count: number; error_count: number };
+export type ExportRecord = { id: number; source_kind: string; source_identifier: string; name: string; modified_time?: string; imported_at?: string; first_imported_at?: string; last_seen_at?: string; last_changed_at?: string; status: string; warning_count: number; error_count: number; raw_metadata_json?: string };
+export type SkippedSourceInput = { sourceKind: string; sourceIdentifier: string; name: string; modifiedTime?: string; reason: string; raw?: unknown };
 
 export function upsertExport(db: Database.Database, source: { sourceKind: string; sourceIdentifier: string; name: string; checksum?: string; size?: number; modifiedTime?: string; raw?: unknown }): number {
   const now = new Date().toISOString();
@@ -25,6 +26,18 @@ export function upsertExport(db: Database.Database, source: { sourceKind: string
       imported_at=COALESCE(source_exports.imported_at, source_exports.first_imported_at, excluded.imported_at),
       status='imported',
       raw_metadata_json=excluded.raw_metadata_json`).run(source.sourceKind, source.sourceIdentifier, source.name, source.checksum, source.size, source.modifiedTime, now, now, now, now, JSON.stringify(source.raw ?? {}));
+  return Number((db.prepare('SELECT id FROM source_exports WHERE source_identifier = ?').get(source.sourceIdentifier) as { id: number }).id);
+}
+
+export function upsertSkippedSource(db: Database.Database, source: SkippedSourceInput): number {
+  const now = new Date().toISOString();
+  db.prepare(`INSERT INTO source_exports (source_kind, source_identifier, name, modified_time, first_imported_at, last_seen_at, last_changed_at, status, raw_metadata_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'skipped_no_messages', ?)
+    ON CONFLICT(source_identifier) DO UPDATE SET
+      modified_time=excluded.modified_time,
+      last_seen_at=excluded.last_seen_at,
+      status='skipped_no_messages',
+      raw_metadata_json=excluded.raw_metadata_json`).run(source.sourceKind, source.sourceIdentifier, source.name, source.modifiedTime, now, now, now, JSON.stringify({ reason: source.reason, ...(typeof source.raw === 'object' && source.raw ? source.raw : {}) }));
   return Number((db.prepare('SELECT id FROM source_exports WHERE source_identifier = ?').get(source.sourceIdentifier) as { id: number }).id);
 }
 

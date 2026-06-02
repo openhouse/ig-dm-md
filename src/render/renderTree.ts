@@ -41,7 +41,7 @@ export async function renderArchive(db: Database.Database, config: AppConfig, ou
         messageCount: thread.messages.length,
         mediaCount: thread.media.length,
         sourcePaths: JSON.parse(thread.raw_metadata_json || '{}').sourcePaths ?? [],
-        sourceExports: data.exports.map((e: any) => e.name),
+        sourceExports: data.exports.filter((e: any) => e.status !== 'skipped_no_messages').map((e: any) => e.name),
         renderedFiles: ['chat.md'],
         warnings: dedupeWarnings(thread.warnings).map((w: any) => ({ code: w.code, severity: w.severity, message: w.message }))
       };
@@ -50,8 +50,8 @@ export async function renderArchive(db: Database.Database, config: AppConfig, ou
     }
     const totalMessages = data.threads.reduce((n: number, t: any) => n + t.messages.length, 0);
     const totalMedia = data.threads.reduce((n: number, t: any) => n + t.media.length, 0);
-    await writeFile(path.join(stage, '_system', 'render-manifest.json'), `${JSON.stringify({ app: 'ig-dm-md', version: '0.1.0', config: { source: config.source.kind, timezone: config.render.timezone, outputDir }, sourceExports: data.exports.map((e: any) => ({ id: e.id, name: e.name })), totalThreads: data.threads.length, totalMessages, totalMedia, outputPathsGenerated: generatedPaths }, null, 2)}\n`);
-    await writeFile(path.join(stage, '_system', 'sync-log.md'), '# Sync log\n\nSee imports.md for imported exports.\n');
+    await writeFile(path.join(stage, '_system', 'render-manifest.json'), `${JSON.stringify({ app: 'ig-dm-md', version: '0.1.0', config: { source: config.source.kind, timezone: config.render.timezone, outputDir }, sourceExports: data.exports.filter((e: any) => e.status !== 'skipped_no_messages').map((e: any) => ({ id: e.id, name: e.name })), totalThreads: data.threads.length, totalMessages, totalMedia, outputPathsGenerated: generatedPaths }, null, 2)}\n`);
+    await writeFile(path.join(stage, '_system', 'sync-log.md'), syncLog(data));
   }, force);
   return { threads: data.threads.length, messages: data.threads.reduce((n: number, t: any) => n + t.messages.length, 0), media: data.threads.reduce((n: number, t: any) => n + t.media.length, 0) };
 }
@@ -72,3 +72,8 @@ async function copyMedia(thread: any, dir: string, data: any): Promise<void> {
   }
 }
 function archiveReadme(): string { return `# Instagram DM Markdown Archive\n\nThis is generated output from ig-dm-md and contains private conversations. Do not casually commit, share, or sync this folder.\n\nMarkdown is a reading copy; the canonical local state is the SQLite database in .igdm/state.sqlite.\n`; }
+
+function syncLog(data: any): string {
+  const skipped = data.exports.filter((e: any) => e.status === 'skipped_no_messages').length;
+  return `# Sync log\n\nSee imports.md for imported exports and skipped source diagnostics.\n\n- Source records: ${data.exports.length}\n- Skipped no-message sources: ${skipped}\n`;
+}

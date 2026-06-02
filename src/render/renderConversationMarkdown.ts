@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon';
 import path from 'node:path';
 import type { AppConfig } from '../config.js';
+import { decodeMetaString } from '../instagram/decodeMetaString.js';
 
 export function formatDate(isoOrMs: string | number, config: AppConfig, header = false): string {
   const dt = typeof isoOrMs === 'number' ? DateTime.fromMillis(isoOrMs) : DateTime.fromISO(isoOrMs);
@@ -36,17 +37,22 @@ export function renderConversationMarkdown(thread: any, config: AppConfig): stri
 function renderMessageBody(m: any, raw: any, media: any[], config: AppConfig): string {
   const bodies: string[] = [];
   if (m.content_text) bodies.push(escapeMessage(m.content_text, config));
-  if (raw?.is_unsent || raw?.is_deleted || raw?.deleted || raw?.is_unavailable || m.message_kind === 'unavailable') bodies.push('<Message unavailable>');
+  if (raw?.is_unsent || raw?.is_deleted || raw?.deleted || raw?.is_unavailable || m.message_kind === 'unavailable') bodies.push(unavailablePlaceholder(raw));
   for (const item of media) {
     const name = item.original_filename || item.source_uri || 'attachment';
     if (item.output_relative_path) bodies.push(`<Media omitted: ${escapeMd(name)}> [${item.output_relative_path}]`);
     else bodies.push(`<Media omitted: ${escapeMd(item.source_uri || name)}>`);
   }
-  if (raw?.share) bodies.push(`<Shared link: ${escapeMd(raw.share.link ?? raw.share.href ?? raw.share.share_text ?? 'unknown')}>`);
+  if (raw?.share) bodies.push(`<Shared link: ${escapeMd(decodeMetaString(raw.share.link ?? raw.share.href ?? raw.share.share_text ?? raw.share.text) ?? 'unknown')}>`);
   if (raw?.call_duration) bodies.push(`<Call duration: ${duration(Number(raw.call_duration))}>`);
-  else if (raw?.missed || String(raw?.type ?? '').toLowerCase().includes('call')) bodies.push(`<Call event: ${raw?.missed ? 'missed ' : ''}${escapeMd(String(raw?.type ?? 'call'))}>`);
+  else if (raw?.missed || String(raw?.type ?? '').toLowerCase().includes('call')) bodies.push(`<Call event: ${raw?.missed ? 'missed ' : ''}${escapeMd(decodeMetaString(raw?.type) ?? 'call')}>`);
   if (!bodies.length && m.message_kind === 'unsupported') bodies.push(`<unsupported Instagram message type: ${escapeMd(String(raw?.type ?? 'unknown'))}>`);
   return bodies.join('\n');
+}
+function unavailablePlaceholder(raw: any): string {
+  if (raw?.is_geoblocked_for_viewer === true) return '<Message unavailable: geoblocked for viewer>';
+  if (raw?.is_unsent_image_by_messenger_kid_parent === true) return '<Message unavailable: unsent or restricted image>';
+  return '<Message unavailable>';
 }
 function duration(seconds: number): string { const s = Math.max(0, seconds); const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); const sec = s % 60; return [h,m,sec].map((n) => String(n).padStart(2,'0')).join(':'); }
 export function escapeMd(s: string): string { return s.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/^([#!>\-*])/gm, '\\$1').replace(/!\[/g, '!\\['); }
