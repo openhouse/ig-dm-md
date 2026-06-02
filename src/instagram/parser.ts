@@ -69,13 +69,21 @@ function normalizeMessage(raw: any, sourceThreadKey: string, warnings: ParseWarn
   const attachments = collectAttachments(raw);
   const reactions = collectReactions(raw);
   const share = raw?.share ? { link: decodeMetaString(raw.share.link), text: decodeMetaString(raw.share.share_text ?? raw.share.text), title: decodeMetaString(raw.share.title), raw: raw.share } : undefined;
-  const isUnavailable = Boolean(raw?.is_unsent || raw?.is_deleted || raw?.deleted || raw?.is_unavailable);
+  const metadataOnlyUnavailable = isMetadataOnlyUnavailable(raw);
+  const isUnavailable = Boolean(raw?.is_unsent || raw?.is_deleted || raw?.deleted || raw?.is_unavailable || metadataOnlyUnavailable);
   const call = raw?.call_duration || raw?.missed || String(raw?.type ?? '').toLowerCase().includes('call') ? { type: decodeMetaString(raw?.type), durationSeconds: Number(raw?.call_duration ?? 0) || undefined, missed: Boolean(raw?.missed), raw } : undefined;
   const known = Boolean(text || attachments.length || reactions.length || share || isUnavailable || call);
   const messageKind = isUnavailable ? 'unavailable' : call ? 'call' : share && !text && !attachments.length ? 'share' : attachments.length && !text ? 'media' : text ? (attachments.length || share ? 'mixed' : 'text') : known ? 'mixed' : 'unsupported';
   if (messageKind === 'unsupported') warnings.push({ severity: 'warning', code: 'unsupported_message', message: `Unsupported Instagram message type: ${String(raw?.type ?? 'unknown')}`, sourcePath, sourceThreadKey });
-  const keyMaterial = { sourceThreadKey, timestampMs, senderName, text, attachments: attachments.map((a) => [a.kind, a.sourceUri, a.originalFilename]), share: share ? { link: share.link, text: share.text, title: share.title } : undefined, type: raw?.type, isUnavailable };
+  const keyMaterial = { sourceThreadKey, timestampMs, senderName: raw?.sender_name, text: raw?.content, attachments: attachments.map((a) => [a.kind, a.sourceUri, a.originalFilename]), share: raw?.share ? { link: raw.share.link, text: raw.share.share_text ?? raw.share.text, title: raw.share.title } : undefined, type: raw?.type, isUnavailable: Boolean(raw?.is_unsent || raw?.is_deleted || raw?.deleted || raw?.is_unavailable || metadataOnlyUnavailable) };
   return { fingerprint: sha256Text(stableJson(keyMaterial)), timestampMs, timestampIso: new Date(timestampMs || 0).toISOString(), senderName, text, attachments, reactions, share, call, isUnavailable, messageKind, raw };
+}
+
+function isMetadataOnlyUnavailable(raw: any): boolean {
+  if (!raw || typeof raw !== 'object') return false;
+  if (!raw.sender_name || !raw.timestamp_ms) return false;
+  const allowed = new Set(['sender_name', 'timestamp_ms', 'is_geoblocked_for_viewer', 'is_unsent_image_by_messenger_kid_parent']);
+  return Object.keys(raw).every((key) => allowed.has(key));
 }
 
 function collectAttachments(raw: any): NormalizedAttachment[] {

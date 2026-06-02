@@ -34,6 +34,7 @@ npm run sync:fixture
 You can also run the built CLI against a local export folder:
 
 ```bash
+mkdir -p ./tmp/.igdm
 node dist/cli.js sync --local-source ./fixtures/exports --output ./tmp/archive --state-dir ./tmp/.igdm
 node dist/cli.js render --output ./tmp/archive --state-dir ./tmp/.igdm
 node dist/cli.js doctor --state-dir ./tmp/.igdm
@@ -75,7 +76,7 @@ Rendered Markdown defaults to `instagram-dm-markdown-archive/` and includes:
 - `README.md`
 - `index.md`
 - `conversations.md`
-- `imports.md`
+- `imports.md` (including skipped no-message sources when present)
 - per-conversation `chat.md`
 - per-conversation `metadata.json`
 - `_unsupported/warnings.md`

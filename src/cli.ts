@@ -3,8 +3,9 @@ import { Command } from 'commander';
 import path from 'node:path';
 import { mkdir, access } from 'node:fs/promises';
 import { loadConfig, writeDefaultConfig, type AppConfig } from './config.js';
-import { discoverExports } from './ingest/discoverSources.js';
+import { discoverExportSources } from './ingest/discoverSources.js';
 import { importExport } from './ingest/importExport.js';
+import { upsertSkippedSource } from './store/repositories.js';
 import { openDatabase } from './store/sqlite.js';
 import { renderArchive } from './render/renderTree.js';
 import { createLogger } from './utils/logging.js';
@@ -33,7 +34,8 @@ program.command('sync').description('Import local exports and render Markdown ar
     await mkdir(config.paths.cacheDir, { recursive: true, mode: 0o700 });
     const db = openDatabase(config.paths.stateDir);
     const sourcePath = opts.localSource ?? opts.input ?? config.source.path;
-    const exports = await discoverExports(sourcePath);
+    const discovery = await discoverExportSources(sourcePath);
+    const exports = discovery.exports;
     let exportsImported = 0, conversationsParsed = 0, messagesImported = 0, duplicateMessagesSkipped = 0, mediaItemsImported = 0, warnings = 0;
     for (const exp of exports) {
       const stats = await importExport(db, exp, config.paths.cacheDir, config.identity.selfNames);
@@ -44,9 +46,11 @@ program.command('sync').description('Import local exports and render Markdown ar
       mediaItemsImported += stats.mediaItemsImported;
       warnings += stats.warnings;
     }
+    for (const skipped of discovery.skipped) upsertSkippedSource(db, { sourceKind: skipped.kind, sourceIdentifier: skipped.sourceIdentifier, name: skipped.name, modifiedTime: skipped.modifiedTime, reason: skipped.reason, raw: skipped });
     const rendered = await renderArchive(db, config, config.paths.outputDir, Boolean(opts.force));
-    logger.info({ exportsDiscovered: exports.length, exportsImported, conversationsParsed, messagesImported, duplicateMessagesSkipped, mediaItemsImported, warnings, renderedConversations: rendered.threads }, 'sync complete');
-    console.log(JSON.stringify({ exportsDiscovered: exports.length, exportsImported, conversationsParsed, messagesImported, duplicateMessagesSkipped, mediaItemsImported, warnings }, null, 2));
+    const summary = { sourceFoldersScanned: discovery.sourceFoldersScanned, exportsDiscovered: exports.length, exportsSkippedNoMessages: discovery.exportsSkippedNoMessages, exportsImported, conversationsParsed, messagesImported, duplicateMessagesSkipped, mediaItemsImported, warnings };
+    logger.info({ ...summary, renderedConversations: rendered.threads }, 'sync complete');
+    console.log(JSON.stringify(summary, null, 2));
     db.close();
   });
 
