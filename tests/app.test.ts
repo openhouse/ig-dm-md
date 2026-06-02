@@ -3,6 +3,7 @@ import { mkdtemp, cp, readFile, rm, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import fg from 'fast-glob';
 import { discoverConversationFolders, parseConversation, parseExportRoot } from '../src/instagram/parser.js';
 import { decodeMetaString } from '../src/instagram/decodeMetaString.js';
 import { openDatabase } from '../src/store/sqlite.js';
@@ -96,6 +97,62 @@ describe('store and renderer', () => {
     expect(await readFile(path.join(aliceDir, 'chat.md'), 'utf8')).toBe(before);
     db.close();
   });
+
+  it('keeps child records and stable archive files idempotent across repeated fixture syncs', async () => {
+    const syncOnce = async () => {
+      const db = openDatabase(config.paths.stateDir);
+      let messagesImported = 0;
+      let duplicateMessagesSkipped = 0;
+      for (const exp of await discoverExports(fixtureRoot)) {
+        const stats = await importExport(db, exp, config.paths.cacheDir, config.identity.selfNames);
+        messagesImported += stats.messagesImported;
+        duplicateMessagesSkipped += stats.duplicateMessagesSkipped;
+      }
+      await renderArchive(db, config);
+      const counts = {
+        messages: Number((db.prepare('SELECT COUNT(*) count FROM messages').get() as { count: number }).count),
+        reactions: Number((db.prepare('SELECT COUNT(*) count FROM reactions').get() as { count: number }).count),
+        warnings: Number((db.prepare('SELECT COUNT(*) count FROM warnings').get() as { count: number }).count),
+        media: Number((db.prepare('SELECT COUNT(*) count FROM media').get() as { count: number }).count)
+      };
+      db.close();
+      return { messagesImported, duplicateMessagesSkipped, counts };
+    };
+
+    const first = await syncOnce();
+    const aliceDir = path.join(config.paths.outputDir, 'inbox/direct/alice-example--8ca8a481');
+    const chatBefore = await readFile(path.join(aliceDir, 'chat.md'), 'utf8');
+    const metadataBefore = await readFile(path.join(aliceDir, 'metadata.json'), 'utf8');
+    const parserWarningsBefore = await readFile(path.join(config.paths.outputDir, '_system/parser-warnings.md'), 'utf8');
+    const unsupportedWarningsBefore = await readFile(path.join(config.paths.outputDir, '_unsupported/warnings.md'), 'utf8');
+    const importsBefore = await readFile(path.join(config.paths.outputDir, 'imports.md'), 'utf8');
+    const manifestBefore = await readFile(path.join(config.paths.outputDir, '_system/render-manifest.json'), 'utf8');
+    const chatSnapshotsBefore = await readChatSnapshots(config.paths.outputDir);
+
+    const second = await syncOnce();
+    const chatAfter = await readFile(path.join(aliceDir, 'chat.md'), 'utf8');
+    const metadataAfter = await readFile(path.join(aliceDir, 'metadata.json'), 'utf8');
+    const parserWarningsAfter = await readFile(path.join(config.paths.outputDir, '_system/parser-warnings.md'), 'utf8');
+    const unsupportedWarningsAfter = await readFile(path.join(config.paths.outputDir, '_unsupported/warnings.md'), 'utf8');
+    const importsAfter = await readFile(path.join(config.paths.outputDir, 'imports.md'), 'utf8');
+    const manifestAfter = await readFile(path.join(config.paths.outputDir, '_system/render-manifest.json'), 'utf8');
+
+    expect(first.messagesImported).toBe(14);
+    expect(second.messagesImported).toBe(0);
+    expect(second.duplicateMessagesSkipped).toBe(16);
+    expect(second.counts).toEqual(first.counts);
+    expect(countOccurrences(chatAfter, 'Reaction from Alice Example')).toBe(1);
+    expect(countOccurrences(unsupportedWarningsAfter, 'unsupported_message')).toBe(1);
+    expect(JSON.parse(metadataAfter).warnings).toHaveLength(1);
+    expect(chatAfter).toBe(chatBefore);
+    expect(await readChatSnapshots(config.paths.outputDir)).toEqual(chatSnapshotsBefore);
+    expect(metadataAfter).toBe(metadataBefore);
+    expect(parserWarningsAfter).toBe(parserWarningsBefore);
+    expect(unsupportedWarningsAfter).toBe(unsupportedWarningsBefore);
+    expect(importsAfter).toBe(importsBefore);
+    expect(manifestAfter).toBe(manifestBefore);
+  });
+
   it('slug generation is stable and collision-resistant', () => {
     expect(stableConversationDir('Alice Example', 'key-1')).toBe(stableConversationDir('Alice Example', 'key-1'));
     expect(stableConversationDir('Alice Example', 'key-1')).not.toBe(stableConversationDir('Alice Example', 'key-2'));
@@ -132,4 +189,31 @@ describe('ZIP, atomic safety, logging, doctor', () => {
     expect(out).toContain('driveAuth');
     expect(out).not.toContain('secret');
   });
+  it('supports isolated state directories for sync, render, and doctor', async () => {
+    execFileSync('npm', ['run', 'build'], { stdio: 'ignore' });
+    const stateDir = path.join(temp, 'manual-state');
+    const outputDir = path.join(temp, 'manual-archive');
+    const cli = path.resolve('dist/cli.js');
+
+    const syncOut = execFileSync('node', [cli, 'sync', '--local-source', fixtureRoot, '--output', outputDir, '--state-dir', stateDir], { cwd: temp }).toString();
+    expect(syncOut).toContain('"messagesImported": 14');
+    expect(await readFile(path.join(outputDir, 'inbox/direct/alice-example--8ca8a481/chat.md'), 'utf8')).toContain('Reaction from Alice Example');
+
+    const renderOut = execFileSync('node', [cli, 'render', '--output', outputDir, '--state-dir', stateDir, '--force'], { cwd: temp }).toString();
+    expect(renderOut).toContain('"conversationsRendered": 3');
+
+    const doctorOut = execFileSync('node', [cli, 'doctor', '--state-dir', stateDir], { cwd: temp }).toString();
+    expect(doctorOut).toContain('"stateDir": "ok"');
+  }, 15_000);
 });
+
+async function readChatSnapshots(outputDir: string): Promise<Record<string, string>> {
+  const files = await fg('**/chat.md', { cwd: outputDir, dot: true });
+  const snapshots: Record<string, string> = {};
+  for (const file of files.sort()) snapshots[file] = await readFile(path.join(outputDir, file), 'utf8');
+  return snapshots;
+}
+
+function countOccurrences(text: string, needle: string): number {
+  return text.split(needle).length - 1;
+}

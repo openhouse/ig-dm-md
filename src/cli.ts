@@ -24,6 +24,7 @@ program.command('sync').description('Import local exports and render Markdown ar
   .option('--source <kind>', 'source kind (local)')
   .option('--input <path>', 'local input path')
   .option('--output <path>', 'output archive directory')
+  .option('--state-dir <path>', 'SQLite state directory')
   .option('--once', 'use configured source')
   .option('--force', 'replace unmarked output directory')
   .action(async (opts) => {
@@ -51,6 +52,7 @@ program.command('sync').description('Import local exports and render Markdown ar
 
 program.command('render').description('Re-render Markdown from SQLite without importing')
   .option('--output <path>', 'output archive directory')
+  .option('--state-dir <path>', 'SQLite state directory')
   .option('--force', 'replace unmarked output directory')
   .action(async (opts) => {
     const config = await withOverrides(await loadConfig(), opts);
@@ -78,9 +80,11 @@ program.command('auth').description('Run Google Drive OAuth desktop flow').actio
   console.log('Google Drive auth completed; token stored locally with restrictive permissions.');
 });
 
-program.command('doctor').description('Check config, paths, SQLite, and Drive auth status').action(async () => {
+program.command('doctor').description('Check config, paths, SQLite, and Drive auth status')
+  .option('--state-dir <path>', 'SQLite state directory')
+  .action(async (opts) => {
   const checks: Record<string, string> = {};
-  try { const config = await loadConfig(); checks.config = 'ok'; await mkdir(config.paths.stateDir, { recursive: true, mode: 0o700 }); checks.stateDir = 'ok'; await mkdir(config.paths.cacheDir, { recursive: true, mode: 0o700 }); checks.cacheDir = 'ok'; await mkdir(config.paths.outputDir, { recursive: true }); checks.outputDir = 'ok'; const db = openDatabase(config.paths.stateDir); db.prepare('SELECT 1').get(); db.close(); checks.sqlite = 'ok'; if (config.source.kind === 'google-drive') { try { await access(path.join(config.paths.stateDir, 'token.json')); checks.driveAuth = 'token present'; } catch { checks.driveAuth = 'missing token; run igdm auth'; } } else checks.driveAuth = 'not required for local source'; }
+  try { const config = await withOverrides(await loadConfig(), opts); checks.config = 'ok'; await mkdir(config.paths.stateDir, { recursive: true, mode: 0o700 }); checks.stateDir = 'ok'; await mkdir(config.paths.cacheDir, { recursive: true, mode: 0o700 }); checks.cacheDir = 'ok'; await mkdir(config.paths.outputDir, { recursive: true }); checks.outputDir = 'ok'; const db = openDatabase(config.paths.stateDir); db.prepare('SELECT 1').get(); db.close(); checks.sqlite = 'ok'; if (config.source.kind === 'google-drive') { try { await access(path.join(config.paths.stateDir, 'token.json')); checks.driveAuth = 'token present'; } catch { checks.driveAuth = 'missing token; run igdm auth'; } } else checks.driveAuth = 'not required for local source'; }
   catch (e) { checks.error = e instanceof Error ? e.message : String(e); }
   console.log(JSON.stringify(checks, null, 2));
 });
@@ -88,6 +92,10 @@ program.command('doctor').description('Check config, paths, SQLite, and Drive au
 async function withOverrides(config: AppConfig, opts: any): Promise<AppConfig> {
   const out = structuredClone(config) as AppConfig;
   if (opts.output) out.paths.outputDir = opts.output;
+  if (opts.stateDir) {
+    out.paths.stateDir = opts.stateDir;
+    out.paths.cacheDir = path.join(opts.stateDir, 'cache');
+  }
   if (opts.localSource || opts.input) { out.source.kind = opts.input?.endsWith('.zip') ? 'local-zip' : 'local-folder'; out.source.path = opts.localSource ?? opts.input; }
   return out;
 }
