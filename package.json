@@ -1,0 +1,35 @@
+{
+  "name": "ig-dm-md",
+  "version": "0.1.0",
+  "description": "Local-first Instagram DM exports to Markdown archive",
+  "type": "module",
+  "bin": { "igdm": "dist/cli.js" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "sync:fixture": "tsx src/cli.ts sync --local-source ./fixtures/exports --output ./tmp/archive"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@google-cloud/local-auth": "^3.0.1",
+    "better-sqlite3": "^11.10.0",
+    "chokidar": "^4.0.3",
+    "commander": "^14.0.2",
+    "fast-glob": "^3.3.3",
+    "googleapis": "^166.0.0",
+    "luxon": "^3.7.2",
+    "pino": "^10.1.0",
+    "unzipper": "^0.12.3",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/luxon": "^3.7.1",
+    "@types/node": "^24.10.1",
+    "@types/unzipper": "^0.10.11",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.15"
+  }
+}

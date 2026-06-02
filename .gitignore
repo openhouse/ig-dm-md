@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.igdm/
+credentials.json
+token.json
+instagram-dm-md-archive/
+instagram-dm-markdown-archive/
+rendered-instagram-chats/
+raw-exports/
+*.zip
+tmp/
+.DS_Store

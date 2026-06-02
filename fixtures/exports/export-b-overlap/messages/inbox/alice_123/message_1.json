@@ -1,0 +1,9 @@
+{
+  "title": "Alice Example",
+  "participants": [{"name":"Jamie Burkart"},{"name":"Alice Example"}],
+  "messages": [
+    {"sender_name":"Alice Example","timestamp_ms":1717200000000,"content":"Hey Jamie 😊 — café mañana"},
+    {"sender_name":"Jamie Burkart","timestamp_ms":1717200060000,"content":"Hey — good to hear from you.","reactions":[{"actor":"Alice Example","reaction":"❤️"}]},
+    {"sender_name":"Alice Example","timestamp_ms":1717460000000,"content":"One new overlapping export message"}
+  ]
+}
